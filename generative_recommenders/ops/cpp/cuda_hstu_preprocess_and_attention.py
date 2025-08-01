@@ -22,7 +22,7 @@ import torch
 
 try:
     from generative_recommenders.fb.ultra.ops.fp8.fp8_addmm import (
-        fp8_rowwise_quantize_addmm,
+        fp8_addmm_fwd_rowwise_fused,
     )
     from generative_recommenders.fb.ultra.ops.fp8.layer_norm_quantization import (
         triton_weighted_layer_norm_quantization_fwd,
@@ -87,12 +87,11 @@ class _HSTUPreprocessAndAttentionFunction(torch.autograd.Function):
         )
         if fp8_in_addmm_fwd:
             assert x_scale is not None and normed_x_fp8 is not None
-            uvqk = fp8_rowwise_quantize_addmm(
+            uvqk = fp8_addmm_fwd_rowwise_fused(
                 x_fp8=normed_x_fp8,
                 w=uvqk_weight,
                 y=uvqk_bias,
                 x_scale=x_scale,
-                custom_kernel=False,
             ).contiguous()
         else:
             uvqk = triton_addmm_fwd(x=normed_x, w=uvqk_weight, y=uvqk_bias).contiguous()
@@ -240,12 +239,11 @@ class _HSTUPreprocessAndAttentionFunction(torch.autograd.Function):
             idx += 1
             if ctx.fp8_in_addmm_fwd:
                 x_scale, normed_x_fp8 = ctx.saved_tensors[idx : idx + 2]
-                uvqk = fp8_rowwise_quantize_addmm(
+                uvqk = fp8_addmm_fwd_rowwise_fused(
                     x_fp8=normed_x_fp8,
                     w=uvqk_weight,
                     y=uvqk_bias,
                     x_scale=x_scale,
-                    custom_kernel=False,
                 )
                 idx += 2
             else:
