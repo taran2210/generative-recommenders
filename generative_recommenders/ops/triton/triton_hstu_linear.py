@@ -795,7 +795,7 @@ def triton_layer_norm_mul_dropout_fwd(
     if seed is None:
         seed = torch.randint(low=0, high=2**62, size=(1,), dtype=torch.int64).item()
     num_warps: int = min(max(BLOCK_D // 256, 1), 8)
-    sms = torch.cuda.get_device_properties("cuda").multi_processor_count
+    sms = torch.xpu.get_device_properties("xpu").multi_processor_count
     # Benchmark shows separating RNG from ln_mul_dropout kernel only benefits on
     # blackwell when CONCAT_UX is enabled. (fused RNG kernel can benefit from rand3x fast
     # dropout)
@@ -903,7 +903,7 @@ def triton_layer_norm_mul_dropout_bwd(
         )
     dx = torch.empty_like(x)
     du = torch.empty_like(u)
-    sms = torch.cuda.get_device_properties(x.device).multi_processor_count
+    sms = torch.xpu.get_device_properties(x.device).multi_processor_count
     tile_num = max(1, min(sms * 64, N // 4))
     _dweight = torch.empty((tile_num, D), dtype=torch.float32, device=x.device)
     _dbias = torch.empty((tile_num, D), dtype=torch.float32, device=x.device)

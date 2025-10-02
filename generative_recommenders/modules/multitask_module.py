@@ -39,7 +39,10 @@ class TaskConfig:
     task_type: MultitaskTaskType
 
 
-class MultitaskModule(HammerModule):
+class MultitaskModule(torch.nn.Module): # HammerModule):
+    def __init__(self, is_inference: bool = True) -> None:
+        super().__init__()
+
     @abc.abstractmethod
     def forward(
         self,
@@ -198,9 +201,9 @@ class DefaultMultitaskModule(MultitaskModule):
         embedding_dim: int,
         prediction_fn: Callable[[int, int], torch.nn.Module],
         causal_multitask_weights: float,
-        is_inference: bool,
+        # is_inference: bool,
     ) -> None:
-        super().__init__(is_inference)
+        super().__init__() # is_inference)
         assert (
             sorted(task_configs, key=lambda x: x.task_type) == task_configs
         ), "task_configs must be sorted by task_type."
@@ -231,14 +234,14 @@ class DefaultMultitaskModule(MultitaskModule):
         Optional[torch.Tensor],
     ]:
         orig_dtype = encoded_user_embeddings.dtype
-        if not self._is_inference:
-            encoded_user_embeddings = encoded_user_embeddings.to(self._training_dtype)
-            item_embeddings = item_embeddings.to(self._training_dtype)
+        # if not self._is_inference:
+        #     encoded_user_embeddings = encoded_user_embeddings.to(self._training_dtype)
+        #     item_embeddings = item_embeddings.to(self._training_dtype)
 
         with torch.autocast(
-            "cuda",
+            "xpu",
             dtype=torch.bfloat16,
-            enabled=(not self.is_inference and self._training_dtype == torch.bfloat16),
+            enabled=(not True and self._training_dtype == torch.bfloat16),
         ):
             mt_preds, mt_logits = _compute_pred_and_logits(
                 prediction_module=self._prediction_module,
@@ -252,22 +255,22 @@ class DefaultMultitaskModule(MultitaskModule):
         mt_labels: Optional[torch.Tensor] = None
         mt_weights: Optional[torch.Tensor] = None
         mt_losses: Optional[torch.Tensor] = None
-        if not self._is_inference:
-            mt_labels, mt_weights = _compute_labels_and_weights(
-                supervision_labels=supervision_labels,
-                supervision_weights=supervision_weights,
-                task_configs=self._task_configs,
-                device=encoded_user_embeddings.device,
-            )
-            mt_losses = _compute_loss(
-                task_offsets=self._task_offsets,
-                causal_multitask_weights=self._causal_multitask_weights,
-                mt_logits=mt_logits.to(mt_labels.dtype),
-                mt_labels=mt_labels,
-                mt_weights=mt_weights,
-                has_multiple_task_types=self._has_multiple_task_types,
-            )
-            mt_preds = mt_preds.to(orig_dtype)
+        # if not self._is_inference:
+        #     mt_labels, mt_weights = _compute_labels_and_weights(
+        #         supervision_labels=supervision_labels,
+        #         supervision_weights=supervision_weights,
+        #         task_configs=self._task_configs,
+        #         device=encoded_user_embeddings.device,
+        #     )
+        #     mt_losses = _compute_loss(
+        #         task_offsets=self._task_offsets,
+        #         causal_multitask_weights=self._causal_multitask_weights,
+        #         mt_logits=mt_logits.to(mt_labels.dtype),
+        #         mt_labels=mt_labels,
+        #         mt_weights=mt_weights,
+        #         has_multiple_task_types=self._has_multiple_task_types,
+        #     )
+        #     mt_preds = mt_preds.to(orig_dtype)
 
         return (
             mt_preds,

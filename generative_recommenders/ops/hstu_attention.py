@@ -72,10 +72,10 @@ def hstu_mha(
 
     if kernel in [HammerKernel.TRITON, HammerKernel.TRITON_CC]:
         if not is_fx_tracing() and kernel == HammerKernel.TRITON:
-            torch._assert(q.is_cuda, "q must be CUDA tensor")
-            torch._assert(k.is_cuda, "k must be CUDA tensor")
-            torch._assert(v.is_cuda, "v must be CUDA tensor")
-            torch._assert(seq_offsets.is_cuda, "seq_offsets must be CUDA tensor")
+            torch._assert(q.is_xpu, "q must be CUDA tensor")
+            torch._assert(k.is_xpu, "k must be CUDA tensor")
+            torch._assert(v.is_xpu, "v must be CUDA tensor")
+            torch._assert(seq_offsets.is_xpu, "seq_offsets must be CUDA tensor")
             torch._assert(dropout_pr < 1e-6, "dropout for triton path not implemented")
             torch._assert(
                 min_full_attn_seq_len == 0, "min_full_attn_seq_len not implemented"
@@ -158,10 +158,10 @@ def delta_hstu_mha(
         torch._assert(v.shape[1] == H, "wrong v shape[1]")
     if kernel in [HammerKernel.TRITON, HammerKernel.TRITON_CC]:
         if not is_fx_tracing() and kernel == HammerKernel.TRITON:
-            torch._assert(delta_q.is_cuda, "q must be CUDA tensor")
-            torch._assert(seq_offsets.is_cuda, "seq_offsets must be CUDA tensor")
+            torch._assert(delta_q.is_xpu, "q must be CUDA tensor")
+            torch._assert(seq_offsets.is_xpu, "seq_offsets must be CUDA tensor")
             if num_targets is not None:
-                torch._assert(num_targets.is_cuda, "num_targets must be CUDA tensor")
+                torch._assert(num_targets.is_xpu, "num_targets must be CUDA tensor")
         seq_offsets = seq_offsets.contiguous()
         delta_q = switch_to_contiguous_if_needed(delta_q)
         k = switch_to_contiguous_if_needed(k)

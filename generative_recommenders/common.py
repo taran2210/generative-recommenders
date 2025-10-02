@@ -217,7 +217,7 @@ def apply_sampling(
 
 
 nv_gpu_unavailable: Tuple[bool, str] = (
-    not torch.cuda.is_available() or torch.cuda.device_count() == 0,
+    not torch.xpu.is_available() or torch.xpu.device_count() == 0,
     "CUDA is not available or no GPUs detected",
 )
 nv_gpu_available: bool = not nv_gpu_unavailable[0]

@@ -24,16 +24,16 @@ from generative_recommenders.common import HammerModule
 from generative_recommenders.ops.position import add_timestamp_positional_embeddings
 
 
-class HSTUPositionalEncoder(HammerModule):
+class HSTUPositionalEncoder(torch.nn.Module): # HammerModule):
     def __init__(
         self,
         num_position_buckets: int,
         num_time_buckets: int,
         embedding_dim: int,
         contextual_seq_len: int,
-        is_inference: bool = True,
+        # is_inference: bool = True,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._embedding_dim: int = embedding_dim
         self._contextual_seq_len: int = contextual_seq_len
         self._position_embeddings_weight: torch.nn.Parameter = torch.nn.Parameter(
@@ -70,6 +70,6 @@ class HSTUPositionalEncoder(HammerModule):
             timestamps=seq_timestamps,
             num_targets=num_targets,
             interleave_targets=False,
-            kernel=self.hammer_kernel(),
+            kernel=None,
         )
         return seq_embeddings

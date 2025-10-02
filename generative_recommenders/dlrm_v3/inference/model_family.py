@@ -44,13 +44,14 @@ from torchrec.modules.embedding_configs import EmbeddingConfig, QuantConfig
 from torchrec.test_utils import get_free_port
 
 
-class HSTUModelFamily:
+class HSTUModelFamily(torch.nn.Module):
     def __init__(
         self,
         hstu_config: DlrmHSTUConfig,
         table_config: Dict[str, EmbeddingConfig],
         output_trace: bool = False,
     ) -> None:
+        super().__init__()
         self.hstu_config = hstu_config
         self.table_config = table_config
         self.sparse: ModelFamilySparseDist = ModelFamilySparseDist(
@@ -58,10 +59,11 @@ class HSTUModelFamily:
             table_config=table_config,
         )
 
-        assert torch.cuda.is_available(), "CUDA is required for this benchmark."
-        ngpus = torch.cuda.device_count()
-        self.world_size = int(os.environ.get("WORLD_SIZE", str(ngpus)))
+        assert torch.xpu.is_available(), "XPU is required for this benchmark."
+        nxpus = torch.xpu.device_count()
+        self.world_size = int(os.environ.get("WORLD_SIZE", str(nxpus)))
         print(f"Using {self.world_size} GPU(s)...")
+
         dense_model_family_clazz = (
             ModelFamilyDenseDist
             if self.world_size > 1
@@ -114,7 +116,8 @@ class ModelFamilySparseDist:
         hstu_config: DlrmHSTUConfig,
         table_config: Dict[str, EmbeddingConfig],
     ) -> None:
-        super(ModelFamilySparseDist, self).__init__()
+        # super(ModelFamilySparseDist, self).__init__()
+        super().__init__()
         self.hstu_config = hstu_config
         self.table_config = table_config
         self.module: Optional[torch.nn.Module] = None
@@ -178,25 +181,26 @@ class ModelFamilySparseDist:
             )
 
 
-class ModelFamilyDenseDist:
+class ModelFamilyDenseDist(torch.nn.Module):
     def __init__(
         self,
         hstu_config: DlrmHSTUConfig,
         table_config: Dict[str, EmbeddingConfig],
         output_trace: bool = False,
     ) -> None:
-        super(ModelFamilyDenseDist, self).__init__()
+        # super(ModelFamilyDenseDist, self).__init__()
+        super().__init__()
         self.hstu_config = hstu_config
         self.table_config = table_config
         self.output_trace = output_trace
 
-        ngpus = torch.cuda.device_count()
+        ngpus = torch.xpu.device_count()
         self.world_size = int(os.environ.get("WORLD_SIZE", str(ngpus)))
         self.rank = 0
         os.environ["MASTER_ADDR"] = "localhost"
         os.environ["MASTER_PORT"] = str(get_free_port())
-        self.dist_backend = "nccl"
-
+        self.dist_backend = "oneccl"
+        
         ctx = mp.get_context("spawn")
         self.samples_q: List[mp.Queue] = [ctx.Queue() for _ in range(self.world_size)]
         self.predictions_cache = [  # pyre-ignore[4]
@@ -232,8 +236,9 @@ class ModelFamilyDenseDist:
         ).to(torch.bfloat16)
         load_nonsparse_checkpoint(model=model, optimizer=None, path=model_path)
 
-        device = torch.device(f"cuda:{rank}")
-        torch.cuda.set_device(f"cuda:{rank}")
+        device = torch.device(f"xpu:{rank}")
+        torch.xpu.set_device(f"xpu:{rank}")
+        print(f"rank: {rank} dense module is {model}")
         self.main_lock.set()
         model = model.to(device)
         model.eval()
@@ -278,15 +283,15 @@ class ModelFamilyDenseDist:
                 )
                 assert mt_target_preds is not None
                 mt_target_preds = mt_target_preds.detach().to(
-                    device="cpu", non_blocking=True
+                    device="xpu", non_blocking=True
                 )
                 if mt_target_labels is not None:
                     mt_target_labels = mt_target_labels.detach().to(
-                        device="cpu", non_blocking=True
+                        device="xpu", non_blocking=True
                     )
                 if mt_target_weights is not None:
                     mt_target_weights = mt_target_weights.detach().to(
-                        device="cpu", non_blocking=True
+                        device="xpu", non_blocking=True
                     )
                 self.predictions_cache[rank][id] = (
                     mt_target_preds,
@@ -325,7 +330,7 @@ class ModelFamilyDenseDist:
                 self.samples_q[rank].put(-1)
             return None
         rank = self.get_rank()
-        device = torch.device(f"cuda:{rank}")
+        device = torch.device(f"xpu:{rank}")
         assert (
             payload_features is not None
             and num_candidates is not None
@@ -358,38 +363,37 @@ class ModelFamilyDenseDist:
         return out
 
 
-class ModelFamilyDenseSingleWorker:
+class ModelFamilyDenseSingleWorker(torch.nn.Module):
     def __init__(
         self,
         hstu_config: DlrmHSTUConfig,
         table_config: Dict[str, EmbeddingConfig],
         output_trace: bool = False,
     ) -> None:
+        super().__init__()
         self.model: Optional[torch.nn.Module] = None
         self.hstu_config = hstu_config
         self.table_config = table_config
         self.output_trace = output_trace
-        self.device: torch.device = torch.device("cuda:0")
-        torch.cuda.set_device(self.device)
+        self.device: torch.device = torch.device("xpu:0")
+        torch.xpu.set_device(self.device)
         self.profiler: Optional[Profiler] = (
             Profiler(rank=0) if self.output_trace else None
         )
 
     def load(self, model_path: str) -> None:
         print(f"Loading dense module from {model_path}")
-        self.model = (
-            get_hstu_model(
-                table_config=self.table_config,
-                hstu_config=self.hstu_config,
-                table_device="cpu",
-                is_dense=True,
-            )
-            .to(self.device)
-            .to(torch.bfloat16)
-        )
+        self.model = get_hstu_model(
+            table_config=self.table_config,
+            hstu_config=self.hstu_config,
+            table_device="cpu",
+            is_dense=True,
+        ).to(self.device).to(torch.bfloat16)
         load_nonsparse_checkpoint(model=self.model, optimizer=None, path=model_path)
         assert self.model is not None
         self.model.eval()
+
+        print(f"dense module is {self.model}")
 
     def predict(
         self,

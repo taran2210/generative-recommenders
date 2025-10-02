@@ -27,7 +27,10 @@ from generative_recommenders.ops.layer_norm import LayerNorm, SwishLayerNorm
 from libfb.py.pyre import none_throws
 
 
-class ContextualizedMLP(HammerModule):
+class ContextualizedMLP(torch.nn.Module): # HammerModule):
+    def __init__(self, is_inference: bool = True) -> None:
+        super().__init__()
+
     @abc.abstractmethod
     def forward(
         self,
@@ -54,7 +57,7 @@ class SimpleContextualizedMLP(ContextualizedMLP):
         hidden_dim: int,
         is_inference: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._mlp: torch.nn.Module = torch.nn.Sequential(
             torch.nn.Linear(
                 in_features=sequential_input_dim,
@@ -87,7 +90,7 @@ class ParameterizedContextualizedMLP(ContextualizedMLP):
         hidden_dim: int,
         is_inference: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
 
         self._sequential_input_dim: int = sequential_input_dim
         self._sequential_output_dim: int = sequential_output_dim
@@ -139,5 +142,5 @@ class ParameterizedContextualizedMLP(ContextualizedMLP):
             jagged=seq_embeddings,
             dense=attn_weights.to(seq_embeddings.dtype),
             bias=self._res_weights(shared_input),
-            kernel=self.hammer_kernel(),
+            kernel=None,
         )

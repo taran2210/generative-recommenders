@@ -52,7 +52,7 @@ def default_seq_payload(
         return torch.jit._unwrap_optional(seq_payloads)
 
 
-class HSTUTransducer(HammerModule):
+class HSTUTransducer(torch.nn.Module): # HammerModule):
     def __init__(
         self,
         stu_module: STU,
@@ -60,21 +60,21 @@ class HSTUTransducer(HammerModule):
         output_postprocessor: Optional[OutputPostprocessor] = None,
         input_dropout_ratio: float = 0.0,
         positional_encoder: Optional[HSTUPositionalEncoder] = None,
-        is_inference: bool = True,
+        # is_inference: bool = True,
         return_full_embeddings: bool = False,
         listwise: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._stu_module = stu_module
         self._input_preprocessor: InputPreprocessor = input_preprocessor
         self._output_postprocessor: OutputPostprocessor = (
             output_postprocessor
             if output_postprocessor is not None
-            else L2NormPostprocessor(is_inference=is_inference)
+            else L2NormPostprocessor() # is_inference=is_inference)
         )
-        assert (
-            self._is_inference == self._input_preprocessor._is_inference
-        ), f"input_preprocessor must have the same mode; self: {self._is_inference} vs input_preprocessor {self._input_preprocessor._is_inference}"
+        # assert (
+        #     self._is_inference == self._input_preprocessor._is_inference
+        # ), f"input_preprocessor must have the same mode; self: {self._is_inference} vs input_preprocessor {self._input_preprocessor._is_inference}"
         self._positional_encoder: Optional[HSTUPositionalEncoder] = positional_encoder
         self._input_dropout_ratio: float = input_dropout_ratio
         self._return_full_embeddings: bool = return_full_embeddings
@@ -151,11 +151,11 @@ class HSTUTransducer(HammerModule):
                     ),
                 )
 
-        output_seq_embeddings = torch.nn.functional.dropout(
-            output_seq_embeddings,
-            p=self._input_dropout_ratio,
-            training=self.training,
-        )
+        # output_seq_embeddings = torch.nn.functional.dropout(
+        #     output_seq_embeddings,
+        #     p=self._input_dropout_ratio,
+        #     training=self.training,
+        # )
 
         return (
             output_max_seq_len,
@@ -219,7 +219,7 @@ class HSTUTransducer(HammerModule):
                 total_len_right=total_targets,
                 offsets_left=uih_offsets,
                 offsets_right=candidates_offsets,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             )
             interleave_targets: bool = self._input_preprocessor.interleave_targets()
             if interleave_targets:
@@ -234,7 +234,7 @@ class HSTUTransducer(HammerModule):
                     total_len_right=total_targets,
                     offsets_left=uih_offsets,
                     offsets_right=candidates_offsets,
-                    kernel=self.hammer_kernel(),
+                    kernel=None,
                 )
                 candidate_timestamps = candidate_timestamps.squeeze(-1)
                 if interleave_targets:
@@ -266,8 +266,8 @@ class HSTUTransducer(HammerModule):
         Optional[torch.Tensor],
     ]:
         orig_dtype = seq_embeddings.dtype
-        if not self._is_inference:
-            seq_embeddings = seq_embeddings.to(self._training_dtype)
+        # if not self._is_inference:
+        #     seq_embeddings = seq_embeddings.to(self._training_dtype)
 
         (
             max_seq_len,
@@ -311,12 +311,12 @@ class HSTUTransducer(HammerModule):
             seq_payloads=seq_payloads,
         )
 
-        if not self._is_inference:
-            encoded_candidate_embeddings = encoded_candidate_embeddings.to(orig_dtype)
-            if self._return_full_embeddings:
-                encoded_embeddings = fx_unwrap_optional_tensor(encoded_embeddings).to(
-                    orig_dtype
-                )
+        # if not self._is_inference:
+        #     encoded_candidate_embeddings = encoded_candidate_embeddings.to(orig_dtype)
+        #     if self._return_full_embeddings:
+        #         encoded_embeddings = fx_unwrap_optional_tensor(encoded_embeddings).to(
+        #             orig_dtype
+        #         )
         return (
             encoded_candidate_embeddings,
             encoded_embeddings,

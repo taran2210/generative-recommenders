@@ -117,27 +117,28 @@ def _get_supervision_labels_and_weights(
     return supervision_labels, supervision_weights
 
 
-class DlrmHSTU(HammerModule):
+class DlrmHSTU(torch.nn.Module): # HammerModule:
     def __init__(  # noqa C901
         self,
         hstu_configs: DlrmHSTUConfig,
         embedding_tables: Dict[str, EmbeddingConfig],
-        is_inference: bool,
+        # is_inference: bool,
         is_dense: bool = False,
-        bf16_training: bool = True,
+        # bf16_training: bool = True,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         logger.info(f"Initialize HSTU module with configs {hstu_configs}")
         self._hstu_configs = hstu_configs
-        self._bf16_training: bool = bf16_training
+        # self._bf16_training: bool = bf16_training
         set_static_max_seq_lens([self._hstu_configs.max_seq_len])
 
         if not is_dense:
             self._embedding_collection: EmbeddingCollection = EmbeddingCollection(
                 tables=list(embedding_tables.values()),
                 need_indices=False,
-                device=torch.device("meta"),
+                device=torch.device("cpu"),
             )
+            return
 
         # multitask configs must be sorted by task types
         self._multitask_configs: List[TaskConfig] = hstu_configs.multitask_configs
@@ -150,7 +151,7 @@ class DlrmHSTU(HammerModule):
                 torch.nn.Linear(in_features=512, out_features=num_tasks),
             ).apply(init_mlp_weights_optional_bias),
             causal_multitask_weights=hstu_configs.causal_multitask_weights,
-            is_inference=self._is_inference,
+            # is_inference=self._is_inference,
         )
 
         # preprocessor setup
@@ -163,7 +164,7 @@ class DlrmHSTU(HammerModule):
             action_embedding_dim=8,
             action_feature_name=self._hstu_configs.uih_weight_feature_name,
             action_weights=self._hstu_configs.action_weights,
-            is_inference=is_inference,
+            # is_inference=is_inference,
         )
 
         # positional encoder
@@ -174,7 +175,7 @@ class DlrmHSTU(HammerModule):
             contextual_seq_len=sum(
                 dict(hstu_configs.contextual_feature_to_max_length).values()
             ),
-            is_inference=self._is_inference,
+            # is_inference=self._is_inference,
         )
 
         if hstu_configs.enable_postprocessor:
@@ -182,7 +183,7 @@ class DlrmHSTU(HammerModule):
                 postprocessor = LayerNormPostprocessor(
                     embedding_dim=hstu_configs.hstu_transducer_embedding_dim,
                     eps=1e-5,
-                    is_inference=self._is_inference,
+                    # is_inference=self._is_inference,
                 )
             else:
                 postprocessor = TimestampLayerNormPostprocessor(
@@ -193,7 +194,7 @@ class DlrmHSTU(HammerModule):
                         # (24 * 60 * 60, 365), # time of year (approximate)
                     ],
                     eps=1e-5,
-                    is_inference=self._is_inference,
+                    # is_inference=self._is_inference,
                 )
         else:
             postprocessor = None
@@ -219,11 +220,11 @@ class DlrmHSTU(HammerModule):
                         sort_by_length=True,
                         contextual_seq_len=0,
                     ),
-                    is_inference=is_inference,
+                    # is_inference=is_inference,
                 )
                 for _ in range(hstu_configs.hstu_attn_num_layers)
             ],
-            is_inference=is_inference,
+            # is_inference=is_inference,
         )
         self._hstu_transducer: HSTUTransducer = HSTUTransducer(
             stu_module=stu_module,
@@ -231,7 +232,7 @@ class DlrmHSTU(HammerModule):
             output_postprocessor=postprocessor,
             input_dropout_ratio=hstu_configs.hstu_input_dropout_ratio,
             positional_encoder=positional_encoder,
-            is_inference=self._is_inference,
+            # is_inference=self._is_inference,
             return_full_embeddings=False,
             listwise=False,
         )
@@ -304,19 +305,19 @@ class DlrmHSTU(HammerModule):
             values_right=payload_features[
                 self._hstu_configs.candidates_querytime_feature_name
             ].unsqueeze(-1),
-            kernel=self.hammer_kernel(),
+            kernel=None, # self.hammer_kernel(),
         ).squeeze(-1)
         total_targets = int(num_candidates.sum().item())
         embedding = seq_embeddings[
             self._hstu_configs.uih_post_id_feature_name
         ].embedding
         dtype = embedding.dtype
-        if (not self.is_inference) and self._bf16_training:
-            embedding = embedding.to(torch.bfloat16)
+        # if (not self.is_inference) and self._bf16_training:
+        #     embedding = embedding.to(torch.bfloat16)
         with torch.autocast(
-            "cuda",
+            "xpu",
             dtype=torch.bfloat16,
-            enabled=(not self.is_inference) and self._bf16_training,
+            # enabled=(not self.is_inference) and self._bf16_training,
         ):
             candidates_user_embeddings, _ = self._hstu_transducer(
                 max_uih_len=max_uih_len,
@@ -399,7 +400,7 @@ class DlrmHSTU(HammerModule):
                 not in self._hstu_configs.user_embedding_feature_names
             ):
                 values_left = uih_features[uih_feature_name].values()
-                if self._is_inference and (
+                if (
                     candidate_feature_name
                     == self._hstu_configs.candidates_weight_feature_name
                     or candidate_feature_name
@@ -476,7 +477,7 @@ class DlrmHSTU(HammerModule):
                             num_candidates
                         ),
                         values_right=seq_embeddings[candidate_feature_name].embedding,
-                        kernel=self.hammer_kernel(),
+                        kernel=None # self.hammer_kernel(),
                     ),
                 )
 
@@ -514,9 +515,9 @@ class DlrmHSTU(HammerModule):
             )
 
         aux_losses: Dict[str, torch.Tensor] = {}
-        if not self._is_inference and self.training:
-            for i, task in enumerate(self._multitask_configs):
-                aux_losses[task.task_name] = mt_losses[i]
+        # if not self._is_inference and self.training:
+        #     for i, task in enumerate(self._multitask_configs):
+        #         aux_losses[task.task_name] = mt_losses[i]
 
         return (
             candidates_user_embeddings,

@@ -534,7 +534,7 @@ def triton_weighted_layer_norm_bwd(
         assert weight is not None and bias is not None
         N, D = x.shape
         dx = torch.empty_like(x)
-        sms = torch.cuda.get_device_properties(x.device).multi_processor_count
+        sms = torch.xpu.get_device_properties(x.device).multi_processor_count
         tile_num = max(1, min(sms * 8, N // 4))
         _dweight = torch.empty((tile_num, D), dtype=torch.float32, device=x.device)
         _dbias = torch.empty((tile_num, D), dtype=torch.float32, device=x.device)
@@ -867,7 +867,7 @@ class RMSNormFunction(torch.autograd.Function):
         def grid(META):
             return (triton.cdiv(D, META["BLOCK_D"]),)
 
-        sms = torch.cuda.get_device_properties(x.device).multi_processor_count
+        sms = torch.xpu.get_device_properties(x.device).multi_processor_count
         blocks = triton.next_power_of_2(sms * 4)
         BLOCK_D = triton.next_power_of_2(triton.cdiv(D, blocks))
         BLOCK_D = min(max(BLOCK_D, 4), 128)
@@ -948,7 +948,7 @@ class SwishLayerNormFunction(torch.autograd.Function):
         x, weight, bias, mean, rstd = ctx.saved_tensors
         N, D = x.shape
         dx = torch.empty_like(x)
-        sms = torch.cuda.get_device_properties(x.device).multi_processor_count
+        sms = torch.xpu.get_device_properties(x.device).multi_processor_count
         tile_num = max(1, min(sms * 8, N // 4))
         _dweight = torch.empty((tile_num, D), dtype=torch.float32, device=x.device)
         _dbias = torch.empty((tile_num, D), dtype=torch.float32, device=x.device)

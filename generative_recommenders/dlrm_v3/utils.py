@@ -63,7 +63,7 @@ def _on_trace_ready_fn(
         path = f"manifold://{bucket_name}/{manifold_path}/{file_name}"
         logger.warning(
             p.key_averages(group_by_input_shape=True).table(
-                sort_by="self_cuda_time_total"
+                sort_by="self_xpu_time_total"
             )
         )
         logger.warning(
@@ -78,14 +78,14 @@ def profiler_or_nullcontext(enabled: bool, with_stack: bool):
     return (
         profile(
             # pyre-fixme[16]: Module `profiler` has no attribute `ProfilerActivity`.
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            on_trace_ready=_on_trace_ready_fn(),
+            activities=[ ProfilerActivity.CPU, ProfilerActivity.XPU],
+            # on_trace_ready=_on_trace_ready_fn(), # torch.profiler.tensorboard_trace_handler('./logs'),
             with_stack=with_stack,
+            record_shapes=True,
         )
         if enabled
         else contextlib.nullcontext()
     )
-
 
 class Profiler:
     def __init__(self, rank, active: int = 50) -> None:
@@ -97,15 +97,16 @@ class Profiler:
                 active=active,
                 repeat=1,
             ),
-            on_trace_ready=_on_trace_ready_fn(self.rank),
+            # on_trace_ready=_on_trace_ready_fn(self.rank),
             # pyre-fixme[16]: Module `profiler` has no attribute `ProfilerActivity`.
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            activities=[ ProfilerActivity.CPU, ProfilerActivity.XPU],
             record_shapes=True,
-            profile_memory=False,
-            with_stack=False,
-            with_flops=False,
-            with_modules=False,
+            # profile_memory=True, # False,
+            # with_stack=True, # False,
+            # with_flops=True, # False,
+            # with_modules=True, # False,
         )
+        self._profiler.start()
 
     def step(self) -> None:
         self._profiler.step()
@@ -276,7 +277,7 @@ def get_dataset(name: str, new_path_prefix: str = ""):
             DLRMv3MovieLensDataset,
             {
                 "ratings_file": os.path.join(
-                    new_path_prefix, "data/ml-1m/sasrec_format.csv"
+                    new_path_prefix, "/data/ml-1m/sasrec_format.csv"
                 ),
             },
         )
@@ -285,7 +286,7 @@ def get_dataset(name: str, new_path_prefix: str = ""):
             DLRMv3MovieLensDataset,
             {
                 "ratings_file": os.path.join(
-                    new_path_prefix, "data/ml-20m/sasrec_format.csv"
+                    new_path_prefix, "/data/ml-20m/sasrec_format.csv"
                 ),
             },
         )
@@ -294,7 +295,7 @@ def get_dataset(name: str, new_path_prefix: str = ""):
             DLRMv3SyntheticMovieLensDataset,
             {
                 "ratings_file_prefix": os.path.join(
-                    new_path_prefix, "data/ml-13b/16x16384"
+                    new_path_prefix, "/data/ml-13b/16x16384"
                 ),
             },
         )
@@ -303,7 +304,7 @@ def get_dataset(name: str, new_path_prefix: str = ""):
             DLRMv3KuaiRandDataset,
             {
                 "seq_logs_file": os.path.join(
-                    new_path_prefix, "data/KuaiRand-1K/data/processed_seqs.csv"
+                    new_path_prefix, "/data/KuaiRand-1K/data/processed_seqs.csv"
                 ),
             },
         )

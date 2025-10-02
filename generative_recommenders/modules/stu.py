@@ -38,7 +38,10 @@ except OSError:
     pass
 
 
-class STU(HammerModule, abc.ABC):
+class STU(torch.nn.Module): # HammerModule, abc.ABC:
+    def __init__(self):
+        super().__init__()
+
     def cached_forward(
         self,
         delta_x: torch.Tensor,
@@ -48,11 +51,10 @@ class STU(HammerModule, abc.ABC):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    @abc.abstractmethod
+    # @abc.abstractmethod
     def forward(
         self,
         x: torch.Tensor,
-        x_lengths: torch.Tensor,
         x_offsets: torch.Tensor,
         max_seq_len: int,
         num_targets: torch.Tensor,
@@ -182,10 +184,10 @@ class STULayer(STU):
     def __init__(
         self,
         config: STULayerConfig,
-        is_inference: bool = False,
+        # is_inference: bool = False,
     ) -> None:
         super().__init__(
-            is_inference=is_inference,
+            # is_inference=is_inference,
         )
         self.reset_kv_cache()
         self._num_heads: int = config.num_heads
@@ -321,7 +323,7 @@ class STULayer(STU):
                 recompute_normed_x_in_backward=self._recompute_normed_x,
                 sort_by_length=self._sort_by_length,
                 prefill=kv_caching_lengths is not None,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             )
 
         self.update_kv_cache(
@@ -348,7 +350,7 @@ class STULayer(STU):
                 linear_dim=self._hidden_dim,
                 concat_ux=True,
                 training=self.training,
-                kernel=self.hammer_kernel(),
+                kernel=None,
                 recompute_y_in_backward=self._recompute_y,
             )
 
@@ -370,7 +372,7 @@ class STULayer(STU):
                 hidden_dim=self._hidden_dim,
                 uvqk_weight=self._uvqk_weight.to(delta_x.dtype),
                 uvqk_bias=self._uvqk_beta.to(delta_x.dtype),
-                kernel=self.hammer_kernel(),
+                kernel=None,
             )
         k, v, max_seq_len, seq_offsets = self.construct_full_kv(
             delta_k=delta_k.flatten(1, 2),
@@ -397,7 +399,7 @@ class STULayer(STU):
                 num_targets=num_targets if self._target_aware else None,
                 max_attn_len=self._max_attn_len,
                 contextual_seq_len=self._contextual_seq_len,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             ).view(-1, self._hidden_dim * self._num_heads)
         with record_function("## stu_compute_output ##"):
             return hstu_compute_output(
@@ -414,7 +416,7 @@ class STULayer(STU):
                 linear_dim=self._hidden_dim,
                 concat_ux=True,
                 training=self.training,
-                kernel=self.hammer_kernel(),
+                kernel=None,
                 recompute_y_in_backward=self._recompute_y,
             )
 
@@ -423,9 +425,9 @@ class STUStack(STU):
     def __init__(
         self,
         stu_list: List[STU],
-        is_inference: bool = False,
+        # is_inference: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._stu_layers: torch.nn.ModuleList = torch.nn.ModuleList(modules=stu_list)
 
     def forward(
@@ -458,7 +460,7 @@ class STUStack(STU):
         kv_caching_lengths: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         for layer in self._stu_layers:
-            delta_x = layer.cached_forward(  # pyre-ignore [29]
+            delta_x = layer.cached_forward(
                 delta_x=delta_x,
                 num_targets=num_targets,
                 max_kv_caching_len=max_kv_caching_len,

@@ -60,6 +60,8 @@ try:
 except ImportError:
     from generative_recommenders.ops.triton.triton_attention_utils import acc_dq
 
+import os
+os.environ["TRITON_INTERPRET"] = "1"
 
 def _host_descriptor_pre_hook(nargs):
     if not tensor_descriptor_tma:
@@ -287,7 +289,7 @@ def _get_fw_configs() -> List[triton.Config]:  # noqa: C901
 
         # Add TLX configs if TLX is available
         if HAS_TLX:
-            if torch.cuda.get_device_capability()[0] == 9:
+            if torch.xpu.get_device_capability()[0] == 9:
                 # H100 configs
                 configs.append(
                     triton.Config(
@@ -1504,6 +1506,7 @@ def _hstu_attn_fwd_compute_tlx(  # noqa C901
         "IS_DELTA_Q",
     ],
 )
+
 @triton.jit
 def _hstu_attn_fwd(  # noqa C901
     Q,
@@ -2234,7 +2237,7 @@ def _get_bw_configs() -> List[triton.Config]:
             pre_hook=_bwd_pre_hook,
         ),
     ]
-    if torch.cuda.is_available() and torch.version.cuda < "12.8":
+    if torch.xpu.is_available(): # and torch.version.xpu < "12.8":
         configs += [
             triton.Config(
                 {"BLOCK_M": 16, "BLOCK_N": 64, "SEQUENCE_PARALLEL": False, "UNROLL": 1},
@@ -2291,7 +2294,7 @@ def _get_bw_configs() -> List[triton.Config]:
             ),
         ]
     else:
-        print("WARNING: temporarily disabled some autotune configs for CUDA 12.8+")
+        print("WARNING: temporarily disabled some autotune configs for XPU")
     return configs
 
 
@@ -2607,7 +2610,7 @@ def triton_hstu_attention_fwd(
 
     def alloc_fn(size: int, align: int, stream: Optional[int]):
         assert align == TMA_DESC_SIZE
-        return torch.empty(size, dtype=torch.int8, device="cuda")
+        return torch.empty(size, dtype=torch.int8, device="xpu")
 
     # pyre-ignore [6]
     triton.set_allocator(alloc_fn)
@@ -2615,7 +2618,7 @@ def triton_hstu_attention_fwd(
         triton.cdiv(N, meta["BLOCK_M"]),
         Z * H,
     )
-
+    
     _hstu_attn_fwd[grid](
         Q=desc_q,
         K=desc_k,
@@ -2646,7 +2649,7 @@ def triton_hstu_attention_fwd(
         max_attn_len=max_attn_len,
         HAS_MULTIPLE_TARGETS=has_multiple_targets,
         IS_DELTA_Q=False,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         BLOCK_D_Q=DimQ,
         BLOCK_D_V=DimV,
         HAS_CONTEXTUAL_SEQ_LEN=has_contextual_seq_len,
@@ -2702,7 +2705,7 @@ def triton_hstu_attention_bwd(
 
     def alloc_fn(size: int, align: int, stream: Optional[int]):
         assert align == TMA_DESC_SIZE
-        return torch.empty(size, dtype=torch.int8, device="cuda")
+        return torch.empty(size, dtype=torch.int8, device="xpu")
 
     # pyre-ignore [6]
     triton.set_allocator(alloc_fn)
@@ -2749,7 +2752,7 @@ def triton_hstu_attention_bwd(
         HAS_MULTIPLE_TARGETS=num_targets is not None,
         HAS_CONTEXTUAL_SEQ_LEN=contextual_seq_len > 0,
         HAS_MAX_ATTN_LEN=max_attn_len > 0,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         BLOCK_D_Q=DimQ,
         BLOCK_D_V=DimV,
         HAS_SORT_BY_LENGTH_INDICES=sort_by_length_indices is not None,
@@ -2953,7 +2956,7 @@ def triton_cached_hstu_mha(
 
     def alloc_fn(size: int, align: int, stream: Optional[int]):
         assert align == TMA_DESC_SIZE
-        return torch.empty(size, dtype=torch.int8, device="cuda")
+        return torch.empty(size, dtype=torch.int8, device="xpu")
 
     # pyre-ignore [6]
     triton.set_allocator(alloc_fn)
@@ -2994,7 +2997,7 @@ def triton_cached_hstu_mha(
         DeltaSize=DeltaSize,
         HAS_MULTIPLE_TARGETS=num_targets is not None,
         IS_DELTA_Q=True,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         BLOCK_D_Q=DimQ,
         BLOCK_D_V=DimV,
         HAS_CONTEXTUAL_SEQ_LEN=has_contextual_seq_len,

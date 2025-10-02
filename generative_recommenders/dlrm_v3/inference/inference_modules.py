@@ -28,13 +28,12 @@ from torchrec.modules.embedding_modules import (
 from torchrec.sparse.jagged_tensor import KeyedJaggedTensor
 
 
-IS_INFERENCE: bool = True
+# IS_INFERENCE: bool = True
 
 
-def set_is_inference(is_inference: bool = False) -> None:
-    global IS_INFERENCE
-    IS_INFERENCE = is_inference
-
+# def set_is_inference(is_inference: bool = False) -> None:
+#     global IS_INFERENCE
+#     IS_INFERENCE = is_inference
 
 def get_hstu_model(
     table_config,
@@ -51,11 +50,11 @@ def get_hstu_model(
     model = DlrmHSTU(
         hstu_configs=hstu_config,
         embedding_tables=table_config,
-        is_inference=IS_INFERENCE,
+        # is_inference=IS_INFERENCE,
         is_dense=is_dense,
     )
     model.eval()
-    model.recursive_setattr("_use_triton_cc", False)
+    # model.recursive_setattr("_use_triton_cc", False)
     for _, module in model.named_modules():
         if isinstance(module, EmbeddingBagCollection) or isinstance(
             module, EmbeddingCollection

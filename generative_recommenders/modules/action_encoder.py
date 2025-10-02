@@ -24,7 +24,7 @@ from generative_recommenders.common import HammerModule
 from generative_recommenders.ops.jagged_tensors import concat_2D_jagged
 
 
-class ActionEncoder(HammerModule):
+class ActionEncoder(torch.nn.Module): # HammerModule):
     def __init__(
         self,
         action_embedding_dim: int,
@@ -36,7 +36,7 @@ class ActionEncoder(HammerModule):
         ] = None,
         is_inference: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._watchtime_feature_name: str = watchtime_feature_name
         self._action_feature_name: str = action_feature_name
         self._watchtime_to_action_thresholds_and_weights: List[Tuple[int, int]] = (
@@ -107,6 +107,6 @@ class ActionEncoder(HammerModule):
             max_len_right=max_targets,
             offsets_left=uih_offsets,
             offsets_right=target_offsets,
-            kernel=self.hammer_kernel(),
+            kernel=None,
         )
         return action_embeddings

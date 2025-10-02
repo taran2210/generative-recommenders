@@ -32,8 +32,10 @@ from generative_recommenders.ops.jagged_tensors import concat_2D_jagged
 from generative_recommenders.ops.layer_norm import LayerNorm, SwishLayerNorm
 
 
-class InputPreprocessor(HammerModule):
+class InputPreprocessor(torch.nn.Module): # HammerModule):
     """An abstract class for pre-processing sequence embeddings before HSTU layers."""
+    def __init__(self, is_inference: bool = False) -> None:
+        super().__init__() # is_inference=is_inference)
 
     @abc.abstractmethod
     def forward(
@@ -116,9 +118,9 @@ class ContextualPreprocessor(InputPreprocessor):
         action_embedding_dim: int = 8,
         action_feature_name: str = "",
         action_weights: Optional[List[int]] = None,
-        is_inference: bool = True,
+        # is_inference: bool = True,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._output_embedding_dim: int = output_embedding_dim
         self._input_embedding_dim: int = input_embedding_dim
         self._hidden_dim: int = hidden_dim
@@ -172,7 +174,7 @@ class ContextualPreprocessor(InputPreprocessor):
                 action_feature_name=action_feature_name,
                 action_weights=self._action_weights,
                 action_embedding_dim=action_embedding_dim,
-                is_inference=is_inference,
+                # is_inference=is_inference,
             )
             self._action_embedding_mlp: torch.nn.Module = torch.nn.Sequential(
                 torch.nn.Linear(
@@ -211,8 +213,12 @@ class ContextualPreprocessor(InputPreprocessor):
     ]:
         output_seq_embeddings = self._content_embedding_mlp(seq_embeddings)
         max_seq_len = max_uih_len + max_targets
-        target_offsets = torch.ops.fbgemm.asynchronous_complete_cumsum(num_targets)
-        seq_offsets = torch.ops.fbgemm.asynchronous_complete_cumsum(seq_lengths)
+        target_offsets = torch.ops.fbgemm.asynchronous_complete_cumsum(
+            num_targets
+            )
+        seq_offsets = torch.ops.fbgemm.asynchronous_complete_cumsum(
+            seq_lengths
+            )
         uih_offsets = seq_offsets - target_offsets
         if self._action_weights is not None:
             action_embeddings = self._action_encoder(
@@ -266,7 +272,7 @@ class ContextualPreprocessor(InputPreprocessor):
                 max_len_right=output_max_seq_len,
                 offsets_left=None,
                 offsets_right=output_seq_offsets,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             )
             output_seq_timestamps = concat_2D_jagged(
                 max_seq_len=self._max_contextual_seq_len + output_max_seq_len,
@@ -280,7 +286,7 @@ class ContextualPreprocessor(InputPreprocessor):
                 max_len_right=output_max_seq_len,
                 offsets_left=None,
                 offsets_right=output_seq_offsets,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             ).squeeze(-1)
             output_max_seq_len = output_max_seq_len + self._max_contextual_seq_len
             output_seq_lengths = output_seq_lengths + self._max_contextual_seq_len

@@ -51,7 +51,7 @@ class ContextualInterleavePreprocessor(InputPreprocessor):
         enable_interleaving: bool = False,
         is_inference: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._input_embedding_dim: int = input_embedding_dim
         self._output_embedding_dim: int = output_embedding_dim
         self._contextual_feature_to_max_length: Dict[str, int] = (
@@ -186,7 +186,7 @@ class ContextualInterleavePreprocessor(InputPreprocessor):
                 max_len_right=output_max_seq_len,
                 offsets_left=None,
                 offsets_right=output_seq_offsets,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             )
             output_seq_timestamps = concat_2D_jagged(
                 max_seq_len=self._max_contextual_seq_len + output_max_seq_len,
@@ -200,7 +200,7 @@ class ContextualInterleavePreprocessor(InputPreprocessor):
                 max_len_right=output_max_seq_len,
                 offsets_left=None,
                 offsets_right=output_seq_offsets,
-                kernel=self.hammer_kernel(),
+                kernel=None,
             ).squeeze(-1)
             output_max_seq_len = output_max_seq_len + self._max_contextual_seq_len
             output_total_uih_len = (
@@ -247,7 +247,7 @@ class ContextualInterleavePreprocessor(InputPreprocessor):
     ]:
         max_seq_len = max_uih_len + max_targets
         with torch.autocast(
-            "cuda",
+            "xpu",
             dtype=torch.bfloat16,
             enabled=(not self.is_inference and self._training_dtype == torch.bfloat16),
         ):

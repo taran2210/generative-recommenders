@@ -119,6 +119,7 @@ def get_hstu_configs(dataset: str = "debug") -> DlrmHSTUConfig:
                 "dummy_weights",
                 "dummy_watch_time",
             ]
+
         )
         hstu_config.hstu_candidate_feature_names = [
             "item_movie_id",

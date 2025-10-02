@@ -24,7 +24,7 @@ from generative_recommenders.common import HammerModule
 from generative_recommenders.ops.jagged_tensors import concat_2D_jagged
 
 
-class ContentEncoder(HammerModule):
+class ContentEncoder(torch.nn.Module): # HammerModule):
     def __init__(
         self,
         input_embedding_dim: int,
@@ -32,7 +32,7 @@ class ContentEncoder(HammerModule):
         target_enrich_features: Optional[Dict[str, int]] = None,
         is_inference: bool = False,
     ) -> None:
-        super().__init__(is_inference=is_inference)
+        super().__init__() # is_inference=is_inference)
         self._input_embedding_dim: int = input_embedding_dim
         self._additional_content_features: Dict[str, int] = (
             additional_content_features
@@ -93,7 +93,7 @@ class ContentEncoder(HammerModule):
                     max_len_right=max_targets,
                     offsets_left=uih_offsets,
                     offsets_right=target_offsets,
-                    kernel=self.hammer_kernel(),
+                    kernel=None,
                 )
                 content_embeddings_list.append(enrich_embeddings)
 

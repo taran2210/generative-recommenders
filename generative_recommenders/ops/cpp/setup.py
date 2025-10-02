@@ -21,7 +21,7 @@ from torch.utils.cpp_extension import BuildExtension, CUDA_HOME, CUDAExtension
 this_dir = os.path.dirname(os.path.abspath(__file__))
 PACKAGE_NAME = "hstu"
 # FORCE_BUILD: Force a fresh build locally, instead of attempting to find prebuilt wheels
-# SKIP_CUDA_BUILD: Intended to allow CI to use a simple `python setup.py sdist` run to copy over raw files, without any cuda compilation
+# SKIP_CUDA_BUILD: Intended to allow CI to use a simple `python setup.py sdist` run to copy over raw files, without any xpu compilation
 FORCE_BUILD = os.getenv("FLASH_ATTENTION_FORCE_BUILD", "FALSE") == "TRUE"
 SKIP_CUDA_BUILD = os.getenv("FLASH_ATTENTION_SKIP_CUDA_BUILD", "FALSE") == "TRUE"
 # For CI, we want the option to build with C++11 ABI since the nvcr images use C++11 ABI
@@ -31,8 +31,8 @@ FORCE_CXX11_ABI = os.getenv("FLASH_ATTENTION_FORCE_CXX11_ABI", "FALSE") == "TRUE
 # "-gencode arch=compute_sm90a,code=sm_90a" to files ending in '_sm90.cu',
 # and pass "-gencode arch=compute_sm80,code=sm_80" to files ending in '_sm80.cu'
 from torch.utils.cpp_extension import (
-    _is_cuda_file,
-    _join_cuda_home,
+    _is_xpu_file,
+    _join_xpu_home,
     _join_rocm_home,
     _maybe_write,
     COMMON_HIP_FLAGS,
@@ -56,14 +56,14 @@ def _write_ninja_file(
     path,
     cflags,
     post_cflags,
-    cuda_cflags,
-    cuda_post_cflags,
-    cuda_dlink_post_cflags,
+    xpu_cflags,
+    xpu_post_cflags,
+    xpu_dlink_post_cflags,
     sources,
     objects,
     ldflags,
     library_target,
-    with_cuda,
+    with_xpu,
     **kwargs,  # kwargs (ignored) to absorb new flags in torch.utils.cpp_extension
 ) -> None:
     r"""Write a ninja file that does the desired compiling and linking.
@@ -71,14 +71,14 @@ def _write_ninja_file(
     `path`: Where to write this file
     `cflags`: list of flags to pass to $cxx. Can be None.
     `post_cflags`: list of flags to append to the $cxx invocation. Can be None.
-    `cuda_cflags`: list of flags to pass to $nvcc. Can be None.
-    `cuda_postflags`: list of flags to append to the $nvcc invocation. Can be None.
+    `xpu_cflags`: list of flags to pass to $nvcc. Can be None.
+    `xpu_postflags`: list of flags to append to the $nvcc invocation. Can be None.
     `sources`: list of paths to source files
     `objects`: list of desired paths to objects, one per source.
     `ldflags`: list of flags to pass to linker. Can be None.
     `library_target`: Name of the output library. Can be None; in that case,
                       we do no linking.
-    `with_cuda`: If we should be compiling with CUDA.
+    `with_xpu`: If we should be compiling with CUDA.
     """
 
     def sanitize_flags(flags):
@@ -89,9 +89,9 @@ def _write_ninja_file(
 
     cflags = sanitize_flags(cflags)
     post_cflags = sanitize_flags(post_cflags)
-    cuda_cflags = sanitize_flags(cuda_cflags)
-    cuda_post_cflags = sanitize_flags(cuda_post_cflags)
-    cuda_dlink_post_cflags = sanitize_flags(cuda_dlink_post_cflags)
+    xpu_cflags = sanitize_flags(xpu_cflags)
+    xpu_post_cflags = sanitize_flags(xpu_post_cflags)
+    xpu_dlink_post_cflags = sanitize_flags(xpu_dlink_post_cflags)
     ldflags = sanitize_flags(ldflags)
 
     # Sanity checks...
@@ -103,11 +103,11 @@ def _write_ninja_file(
     # Version 1.3 is required for the `deps` directive.
     config = ["ninja_required_version = 1.3"]
     config.append(f"cxx = {compiler}")
-    if with_cuda or cuda_dlink_post_cflags:
+    if with_xpu or xpu_dlink_post_cflags:
         if IS_HIP_EXTENSION:
             nvcc = _join_rocm_home("bin", "hipcc")
         else:
-            nvcc = _join_cuda_home("bin", "nvcc")
+            nvcc = _join_xpu_home("bin", "nvcc")
         if "PYTORCH_NVCC" in os.environ:
             nvcc_from_env = os.getenv(
                 "PYTORCH_NVCC"
@@ -121,29 +121,29 @@ def _write_ninja_file(
         post_cflags = COMMON_HIP_FLAGS + post_cflags
     flags = [f'cflags = {" ".join(cflags)}']
     flags.append(f'post_cflags = {" ".join(post_cflags)}')
-    if with_cuda:
-        flags.append(f'cuda_cflags = {" ".join(cuda_cflags)}')
-        flags.append(f'cuda_post_cflags = {" ".join(cuda_post_cflags)}')
-        cuda_post_cflags_sm80 = [
+    if with_xpu:
+        flags.append(f'xpu_cflags = {" ".join(xpu_cflags)}')
+        flags.append(f'xpu_post_cflags = {" ".join(xpu_post_cflags)}')
+        xpu_post_cflags_sm80 = [
             s if s != "arch=compute_90a,code=sm_90a" else "arch=compute_80,code=sm_80"
-            for s in cuda_post_cflags
+            for s in xpu_post_cflags
         ]
-        flags.append(f'cuda_post_cflags_sm80 = {" ".join(cuda_post_cflags_sm80)}')
-        cuda_post_cflags_sm80_sm90 = cuda_post_cflags + [
+        flags.append(f'xpu_post_cflags_sm80 = {" ".join(xpu_post_cflags_sm80)}')
+        xpu_post_cflags_sm80_sm90 = xpu_post_cflags + [
             "-gencode",
             "arch=compute_80,code=sm_80",
         ]
         flags.append(
-            f'cuda_post_cflags_sm80_sm90 = {" ".join(cuda_post_cflags_sm80_sm90)}'
+            f'xpu_post_cflags_sm80_sm90 = {" ".join(xpu_post_cflags_sm80_sm90)}'
         )
-        cuda_post_cflags_sm100 = [
+        xpu_post_cflags_sm100 = [
             s
             if s != "arch=compute_90a,code=sm_90a"
             else "arch=compute_100a,code=sm_100a"
-            for s in cuda_post_cflags
+            for s in xpu_post_cflags
         ]
-        flags.append(f'cuda_post_cflags_sm100 = {" ".join(cuda_post_cflags_sm100)}')
-    flags.append(f'cuda_dlink_post_cflags = {" ".join(cuda_dlink_post_cflags)}')
+        flags.append(f'xpu_post_cflags_sm100 = {" ".join(xpu_post_cflags_sm100)}')
+    flags.append(f'xpu_dlink_post_cflags = {" ".join(xpu_dlink_post_cflags)}')
     flags.append(f'ldflags = {" ".join(ldflags)}')
 
     # Turn into absolute paths so we can emit them into the ninja build
@@ -164,61 +164,61 @@ def _write_ninja_file(
         compile_rule.append("  depfile = $out.d")
         compile_rule.append("  deps = gcc")
 
-    if with_cuda:
-        cuda_compile_rule = ["rule cuda_compile"]
+    if with_xpu:
+        xpu_compile_rule = ["rule xpu_compile"]
         nvcc_gendeps = ""
         # --generate-dependencies-with-compile is not supported by ROCm
         # Nvcc flag `--generate-dependencies-with-compile` is not supported by sccache, which may increase build time.
         if (
-            torch.version.cuda is not None
+            torch.version.xpu is not None
             and os.getenv("TORCH_EXTENSION_SKIP_NVCC_GEN_DEPENDENCIES", "0") != "1"
         ):
-            cuda_compile_rule.append("  depfile = $out.d")
-            cuda_compile_rule.append("  deps = gcc")
+            xpu_compile_rule.append("  depfile = $out.d")
+            xpu_compile_rule.append("  deps = gcc")
             # Note: non-system deps with nvcc are only supported
             # on Linux so use --generate-dependencies-with-compile
             # to make this work on Windows too.
             nvcc_gendeps = (
                 "--generate-dependencies-with-compile --dependency-output $out.d"
             )
-        cuda_compile_rule_sm80 = (
-            ["rule cuda_compile_sm80"]
-            + cuda_compile_rule[1:]
+        xpu_compile_rule_sm80 = (
+            ["rule xpu_compile_sm80"]
+            + xpu_compile_rule[1:]
             + [
-                f"  command = $nvcc_from_env {nvcc_gendeps} $cuda_cflags -c $in -o $out $cuda_post_cflags_sm80"
+                f"  command = $nvcc_from_env {nvcc_gendeps} $xpu_cflags -c $in -o $out $xpu_post_cflags_sm80"
             ]
         )
-        cuda_compile_rule_sm80_sm90 = (
-            ["rule cuda_compile_sm80_sm90"]
-            + cuda_compile_rule[1:]
+        xpu_compile_rule_sm80_sm90 = (
+            ["rule xpu_compile_sm80_sm90"]
+            + xpu_compile_rule[1:]
             + [
-                f"  command = $nvcc_from_env {nvcc_gendeps} $cuda_cflags -c $in -o $out $cuda_post_cflags_sm80_sm90"
+                f"  command = $nvcc_from_env {nvcc_gendeps} $xpu_cflags -c $in -o $out $xpu_post_cflags_sm80_sm90"
             ]
         )
-        cuda_compile_rule_sm100 = (
-            ["rule cuda_compile_sm100"]
-            + cuda_compile_rule[1:]
+        xpu_compile_rule_sm100 = (
+            ["rule xpu_compile_sm100"]
+            + xpu_compile_rule[1:]
             + [
-                f"  command = $nvcc_from_env {nvcc_gendeps} $cuda_cflags -c $in -o $out $cuda_post_cflags_sm100"
+                f"  command = $nvcc_from_env {nvcc_gendeps} $xpu_cflags -c $in -o $out $xpu_post_cflags_sm100"
             ]
         )
-        cuda_compile_rule.append(
-            f"  command = $nvcc_from_env {nvcc_gendeps} $cuda_cflags -c $in -o $out $cuda_post_cflags"
+        xpu_compile_rule.append(
+            f"  command = $nvcc_from_env {nvcc_gendeps} $xpu_cflags -c $in -o $out $xpu_post_cflags"
         )
 
     # Emit one build rule per source to enable incremental build.
     build = []
     for source_file, object_file in zip(sources, objects):
-        is_cuda_source = _is_cuda_file(source_file) and with_cuda
-        if is_cuda_source:
+        is_xpu_source = _is_xpu_file(source_file) and with_xpu
+        if is_xpu_source:
             if source_file.endswith("_sm90.cu"):
-                rule = "cuda_compile"
+                rule = "xpu_compile"
             elif source_file.endswith("_sm80.cu"):
-                rule = "cuda_compile_sm80"
+                rule = "xpu_compile_sm80"
             elif source_file.endswith("_sm100.cu"):
-                rule = "cuda_compile_sm100"
+                rule = "xpu_compile_sm100"
             else:
-                rule = "cuda_compile_sm80_sm90"
+                rule = "xpu_compile_sm80_sm90"
         else:
             rule = "compile"
         if IS_WINDOWS:
@@ -228,11 +228,11 @@ def _write_ninja_file(
         object_file = object_file.replace(" ", "$ ")
         build.append(f"build {object_file}: {rule} {source_file}")
 
-    if cuda_dlink_post_cflags:
+    if xpu_dlink_post_cflags:
         devlink_out = os.path.join(os.path.dirname(objects[0]), "dlink.o")
-        devlink_rule = ["rule cuda_devlink"]
-        devlink_rule.append("  command = $nvcc $in -o $out $cuda_dlink_post_cflags")
-        devlink = [f'build {devlink_out}: cuda_devlink {" ".join(objects)}']
+        devlink_rule = ["rule xpu_devlink"]
+        devlink_rule.append("  command = $nvcc $in -o $out $xpu_dlink_post_cflags")
+        devlink = [f'build {devlink_out}: xpu_devlink {" ".join(objects)}']
         objects += [devlink_out]
     else:
         devlink_rule, devlink = [], []
@@ -263,11 +263,11 @@ def _write_ninja_file(
 
     # 'Blocks' should be separated by newlines, for visual benefit.
     blocks = [config, flags, compile_rule]
-    if with_cuda:
-        blocks.append(cuda_compile_rule)  # type: ignore[possibly-undefined]
-        blocks.append(cuda_compile_rule_sm80)  # type: ignore[possibly-undefined]
-        blocks.append(cuda_compile_rule_sm80_sm90)  # type: ignore[possibly-undefined]
-        blocks.append(cuda_compile_rule_sm100)  # type: ignore[possibly-undefined]
+    if with_xpu:
+        blocks.append(xpu_compile_rule)  # type: ignore[possibly-undefined]
+        blocks.append(xpu_compile_rule_sm80)  # type: ignore[possibly-undefined]
+        blocks.append(xpu_compile_rule_sm80_sm90)  # type: ignore[possibly-undefined]
+        blocks.append(xpu_compile_rule_sm100)  # type: ignore[possibly-undefined]
     blocks += [devlink_rule, link_rule, build, devlink, link, default]
     content = "\n\n".join("\n".join(b) for b in blocks)
     # Ninja requires a new lines at the end of the .ninja file
@@ -294,9 +294,9 @@ def get_platform():
         raise ValueError("Unsupported platform: {}".format(sys.platform))
 
 
-def get_cuda_bare_metal_version(cuda_dir):
+def get_xpu_bare_metal_version(xpu_dir):
     raw_output = subprocess.check_output(
-        [cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True
+        [xpu_dir + "/bin/nvcc", "-V"], universal_newlines=True
     )
     output = raw_output.split()
     release_idx = output.index("release") + 1
@@ -305,7 +305,7 @@ def get_cuda_bare_metal_version(cuda_dir):
     return raw_output, bare_metal_version
 
 
-def check_if_cuda_home_none(global_option: str) -> None:
+def check_if_xpu_home_none(global_option: str) -> None:
     if CUDA_HOME is not None:
         return
     # warn instead of error because user could be downloading prebuilt wheels, so nvcc won't be necessary
@@ -337,8 +337,8 @@ if not SKIP_CUDA_BUILD:
     TORCH_MAJOR = int(torch.__version__.split(".")[0])
     TORCH_MINOR = int(torch.__version__.split(".")[1])
 
-    check_if_cuda_home_none(PACKAGE_NAME)
-    _, bare_metal_version = get_cuda_bare_metal_version(CUDA_HOME)
+    check_if_xpu_home_none(PACKAGE_NAME)
+    _, bare_metal_version = get_xpu_bare_metal_version(CUDA_HOME)
     if bare_metal_version < Version("12.3"):
         raise RuntimeError(
             f"FlashAttention-3 is only supported on CUDA 12.3 and above, get {bare_metal_version} from {CUDA_HOME}"
@@ -468,7 +468,7 @@ setup(
             "benchmarks",
         )
     ),
-    py_modules=["cuda_hstu_attention"],
+    py_modules=["xpu_hstu_attention"],
     description="FlashAttention HSTU",
     classifiers=[
         "Programming Language :: Python :: 3",

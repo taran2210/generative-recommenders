@@ -54,7 +54,7 @@ KERNEL_IMPL_TEMPLATE_FWD_SM90 = """
 
 namespace hstu {{
 #ifndef FLASHATTENTION_DISABLE_HDIM{HEAD_DIM}
-template void run_mha_fwd_<{ARCH}, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_fwd_params &params, cudaStream_t stream);
+template void run_mha_fwd_<{ARCH}, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_fwd_params &params, xpuStream_t stream);
 #endif
 }} // namespace hstu
 """
@@ -69,7 +69,7 @@ KERNEL_IMPL_TEMPLATE_FWD_SM8x = """
 namespace hstu {{
 #ifndef FLASHATTENTION_DISABLE_SM8x
 #ifndef FLASHATTENTION_DISABLE_HDIM{HEAD_DIM}
-template void run_mha_fwd_<80, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_fwd_params &params, cudaStream_t stream);
+template void run_mha_fwd_<80, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_fwd_params &params, xpuStream_t stream);
 #endif
 #endif
 }} // namespace hstu
@@ -84,7 +84,7 @@ KERNEL_IMPL_TEMPLATE_BWD_SM90 = """
 
 namespace hstu {{
 #ifndef FLASHATTENTION_DISABLE_HDIM{HEAD_DIM}
-template void run_mha_bwd_<{ARCH}, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_bwd_params &params, cudaStream_t stream);
+template void run_mha_bwd_<{ARCH}, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_bwd_params &params, xpuStream_t stream);
 #endif
 }} // namespace hstu
 """
@@ -99,7 +99,7 @@ KERNEL_IMPL_TEMPLATE_BWD_SM8x = """
 namespace hstu {{
 #ifndef FLASHATTENTION_DISABLE_SM8x
 #ifndef FLASHATTENTION_DISABLE_HDIM{HEAD_DIM}
-template void run_mha_bwd_<80, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_bwd_params &params, cudaStream_t stream);
+template void run_mha_bwd_<80, {DTYPE}, {HEAD_DIM}, {SOFTMAX}>(Flash_bwd_params &params, xpuStream_t stream);
 #endif
 #endif
 }} // namespace hstu

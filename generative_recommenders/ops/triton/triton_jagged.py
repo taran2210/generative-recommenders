@@ -324,7 +324,7 @@ class _JaggedDenseBmmFunction(torch.autograd.Function):
             stride_bias_b=0,
             stride_om=bmm_out.stride(0),
             HAS_BIAS=False,
-            ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+            ALLOW_TF32=torch.backends.xpu.matmul.allow_tf32,
             ELEMENTWISE=False,
         )
 
@@ -365,7 +365,7 @@ class _JaggedDenseBmmFunction(torch.autograd.Function):
             stride_bias_b=0,
             stride_om=d_jagged.stride(0),
             HAS_BIAS=False,
-            ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+            ALLOW_TF32=torch.backends.xpu.matmul.allow_tf32,
             ELEMENTWISE=False,
         )
 
@@ -391,7 +391,7 @@ class _JaggedDenseBmmFunction(torch.autograd.Function):
             stride_orb=0,
             stride_orn=0,
             REDUCE_JAGGEDB=False,
-            ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+            ALLOW_TF32=torch.backends.xpu.matmul.allow_tf32,
         )
 
         return None, None, d_jagged, d_dense
@@ -607,7 +607,7 @@ def triton_jagged_dense_bmm_add_fwd(
         stride_bias_b=bias.stride(0),
         stride_om=out.stride(0),
         HAS_BIAS=True,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         ELEMENTWISE=elementwise,
     )
 
@@ -645,7 +645,7 @@ def triton_jagged_dense_bmm_add_bwd_jagged(
         stride_bias_b=0,
         stride_om=d_jagged.stride(0),
         HAS_BIAS=False,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         ELEMENTWISE=False,
     )
 
@@ -700,7 +700,7 @@ def triton_jagged_dense_bmm_add_bwd_dense_bias(
         stride_orb=stride_orb,
         stride_orn=stride_orn,
         REDUCE_JAGGEDB=reduce_jaggedb,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
     )
 
     return d_dense, d_bias

@@ -39,14 +39,14 @@ except OSError:
 # pyre-ignore[3]
 def _freeze_rng_state() -> Generator[Any, None, None]:
     rng_state = torch.get_rng_state()
-    if torch.cuda.is_available():
-        cuda_rng_state = torch.cuda.get_rng_state()
+    if torch.xpu.is_available():
+        xpu_rng_state = torch.xpu.get_rng_state()
     try:
         yield
     finally:
-        if torch.cuda.is_available():
+        if torch.xpu.is_available():
             # pyre-ignore[61]
-            torch.cuda.set_rng_state(cuda_rng_state)
+            torch.xpu.set_rng_state(xpu_rng_state)
         torch.set_rng_state(rng_state)
 
 
@@ -265,7 +265,7 @@ class L2STU(DynamicSTU):
             prefix_offsets=prefix_offsets,
             l2_offsets=l2_offsets,
             contextual_seq_len=self._contextual_seq_len,
-            kernel=self.hammer_kernel(),
+            kernel=None,
         )
         self._saved_tensors = (
             prefix_offsets,
@@ -300,5 +300,5 @@ class L2STU(DynamicSTU):
             l2_x=stu_output,
             l2_offsets=l2_offsets,
             contextual_seq_len=self._contextual_seq_len,
-            kernel=self.hammer_kernel(),
+            kernel=None,
         )

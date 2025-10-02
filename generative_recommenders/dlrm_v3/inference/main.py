@@ -26,6 +26,7 @@ logging.basicConfig(level=logging.INFO)
 import math
 import os
 import sys
+sys.path.append(os.path.abspath('/workspace/gr'))
 import time
 from typing import Any, Dict, List, Optional, Union
 
@@ -35,6 +36,8 @@ import gin
 import mlperf_loadgen as lg  # @manual
 import numpy as np
 import torch
+torch._C._set_onednn_allow_tf32(True)
+torch.autograd.set_grad_enabled(False)
 from generative_recommenders.common import set_dev_mode, set_verbose_level
 from generative_recommenders.dlrm_v3.configs import (
     get_embedding_table_config,
@@ -46,7 +49,7 @@ from generative_recommenders.dlrm_v3.inference.data_producer import (
     QueryItem,
     SingleThreadDataProducer,
 )
-from generative_recommenders.dlrm_v3.inference.inference_modules import set_is_inference
+# from generative_recommenders.dlrm_v3.inference.inference_modules import set_is_inference
 from generative_recommenders.dlrm_v3.inference.model_family import HSTUModelFamily
 from generative_recommenders.dlrm_v3.utils import (
     get_dataset,
@@ -159,6 +162,11 @@ class Runner:
         self.current_content_ids.extend([q.index for q in query_samples])
         if len(self.current_query_ids) >= self.batchsize:
             self.data_producer.enqueue(self.current_query_ids, self.current_content_ids)
+            # for i in range(0, len(self.current_query_ids), self.batchsize):
+            #     if i + self.batchsize <= len(self.current_content_ids):
+            #         self.data_producer.enqueue(self.current_query_ids[i:i+self.batchsize], self.current_content_ids[i:i+self.batchsize])
+            #     else:
+            #         self.data_producer.enqueue(self.current_query_ids[len(self.current_content_ids)//self.batchsize:], self.current_content_ids[len(self.current_content_ids)//self.batchsize:])
             self.current_query_ids = []
             self.current_content_ids = []
 
@@ -232,13 +240,14 @@ def run(
 
     hstu_config = get_hstu_configs(dataset)
     table_config = get_embedding_table_config(dataset)
-    set_is_inference(is_inference=not compute_eval)
+    # set_is_inference(is_inference=not compute_eval)
 
     model_family = HSTUModelFamily(
         hstu_config=hstu_config,
         table_config=table_config,
-        output_trace=output_trace,
+        output_trace=False, # output_trace,
     )
+
     dataset, kwargs = get_dataset(dataset, new_path_prefix)
 
     ds: Dataset = dataset(
@@ -268,12 +277,22 @@ def run(
         batchsize = 1
 
     # warmup
-    warmup_ids = list(range(batchsize))
+    warmup_ids = list(range(batchsize+1))
     ds.load_query_samples(warmup_ids)
-    for _ in range(5 * int(os.environ.get("WORLD_SIZE", 1))):
-        sample = ds.get_samples(warmup_ids)
-        _ = model_family.predict(sample)
-    ds.unload_query_samples(None)
+    _ = model_family.predict(ds.get_samples(warmup_ids))
+    torch.xpu.synchronize()
+    prof = profiler_or_nullcontext(enabled=output_trace, with_stack=True)
+    with prof:
+        for i in range(1 * int(os.environ.get("WORLD_SIZE", 1))):
+            _ = model_family.predict(ds.get_samples(warmup_ids))
+            torch.xpu.synchronize()
+            # print(f"_: {_}")
+    if prof:
+        print(prof.key_averages().table(
+            sort_by="xpu_time_total", row_limit=20
+        ))
+
+    ds.unload_query_samples(None)    
     for h in logger.handlers:
         h.flush()
     logger.info("warmup done")
@@ -352,7 +371,7 @@ def run(
         "scenario": str(scenario),
     }
 
-    with profiler_or_nullcontext(enabled=output_trace, with_stack=False):
+    with profiler_or_nullcontext(enabled=output_trace, with_stack=True):
         logger.info(f"starting {scenario}")
         lg.StartTest(sut, qsl, settings)
         runner.finish()
@@ -366,6 +385,7 @@ def run(
         runner.result_batches,
         runner.metrics,
     )
+
     # If multiple subprocesses are running the model send a signal to stop them
     if int(os.environ.get("WORLD_SIZE", 1)) > 1:
         model_family.predict(None)
@@ -373,7 +393,6 @@ def run(
     if out_dir:
         with open("results.json", "w") as f:
             json.dump(final_results, f, sort_keys=True, indent=4)
-
 
 def main() -> None:
     set_verbose_level(1)

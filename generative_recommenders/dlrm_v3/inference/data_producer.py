@@ -72,13 +72,13 @@ class MultiThreadDataProducer:
             worker.start()
 
     def handle_tasks(self, tasks_queue: Queue[Optional[QueryItem]]) -> None:
-        stream = torch.cuda.Stream()
+        stream = torch.xpu.Stream()
         while True:
             qitem = tasks_queue.get()
             if qitem is None:
                 tasks_queue.task_done()
                 break
-            with torch.inference_mode(), torch.cuda.stream(stream):
+            with torch.inference_mode(), torch.xpu.stream(stream):
                 self.run_one_item(qitem)
             tasks_queue.task_done()
 

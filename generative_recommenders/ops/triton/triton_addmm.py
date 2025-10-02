@@ -455,7 +455,7 @@ def triton_addmm_fwd_tma_persistent(
     # pyre-ignore[6]: In call `TensorDescriptor.__init__`, for 2nd positional
     # argument, expected `List[int]` but got `Size`
     z_desc = TensorDescriptor(z, z.shape, z.stride(), dummy_block)
-    NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
+    NUM_SMS = torch.xpu.get_device_properties("xpu").multi_processor_count
 
     def grid(meta):
         nonlocal x_desc, w_desc, z_desc
@@ -476,7 +476,7 @@ def triton_addmm_fwd_tma_persistent(
         M,
         N,
         K,
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         BROADCAST_Y=is_y_1d,
         WARP_SPECIALIZE=warp_specialize,
         NUM_SMS=NUM_SMS,
@@ -524,7 +524,7 @@ def triton_addmm_fwd(
         y.stride(1) if not is_y_1d else y.stride(0),
         z.stride(0),
         z.stride(1),
-        ALLOW_TF32=torch.backends.cuda.matmul.allow_tf32,
+        ALLOW_TF32=torch._C._get_onednn_allow_tf32(),
         BROADCAST_Y=is_y_1d,
     )
     return z
@@ -545,7 +545,6 @@ def triton_addmm_bwd(
 
     return dx, dw, dy
 
-
 @torch.fx.wrap
 def maybe_triton_addmm_fwd(
     x: torch.Tensor,
@@ -558,7 +557,6 @@ def maybe_triton_addmm_fwd(
         return torch.addmm(y, x, w)
     else:
         return triton_addmm_fwd(x=x, w=w, y=y)
-
 
 class _AddMmFunction(torch.autograd.Function):
     @staticmethod
